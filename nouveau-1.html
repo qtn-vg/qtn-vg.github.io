@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title> Diagnostique Médical</title>
+  <title>Diagnostic Médical</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700&display=swap" rel="stylesheet">
   <style>
     body {
@@ -74,7 +74,7 @@
 </head>
 <body>
   <div class="container">
-    <h1> Diagnostique Médical</h1>
+    <h1>Diagnostic Médical</h1>
 
     <!-- Informations générales -->
     <label for="age">Âge :</label>
@@ -94,32 +94,29 @@
     <label for="poids">Poids :</label>
     <input type="number" id="poids" min="0" placeholder="Entrez votre poids en kg">
 
-    <!-- Antécédents médicaux -->
     <label for="antecedents">Antécédents médicaux :</label>
-    <textarea id="antecedents" placeholder="Décrivez vos antécédents médicaux (ex : diabète, hypertension, etc.)"></textarea>
+    <textarea id="antecedents" placeholder="Décrivez vos antécédents médicaux"></textarea>
 
-    <!-- Médicaments pris -->
     <label for="medicaments">Médicaments actuellement pris et leur dose :</label>
-    <textarea id="medicaments" placeholder="Indiquez les médicaments que vous prenez et leur dose"></textarea>
+    <textarea id="medicaments" placeholder="Indiquez les médicaments et leur dose"></textarea>
 
-    <!-- Symptômes -->
     <label for="symptoms">Décrivez vos symptômes :</label>
-    <textarea id="symptoms" placeholder="Décrivez vos symptômes (ex : fièvre, toux, fatigue, etc.)"></textarea>
+    <textarea id="symptoms" placeholder="Décrivez vos symptômes"></textarea>
 
-    <!-- Nouvel ajout : Examens Paraclinique et Clinique -->
     <label for="examens_cliniques">Examens cliniques déjà effectués :</label>
-    <textarea id="examens_cliniques" placeholder="Décrivez les examens cliniques réalisés (ex : ECG, examen physique, etc.)"></textarea>
+    <textarea id="examens_cliniques" placeholder="Décrivez les examens cliniques"></textarea>
 
     <label for="examens_paracliniques">Examens paracliniques déjà effectués :</label>
-    <textarea id="examens_paracliniques" placeholder="Décrivez les examens paracliniques réalisés (ex : analyses de sang, radiographie, etc.)"></textarea>
+    <textarea id="examens_paracliniques" placeholder="Décrivez les examens paracliniques"></textarea>
 
-    <!-- Bouton -->
     <button onclick="diagnostiquer()">Diagnostiquer</button>
-
-    <!-- Résultat -->
     <div class="result" id="result"></div>
 
-    <!-- Section de chat -->
+    <!-- Importation d'un fichier CSV -->
+    <label for="csv-file">Importer un fichier CSV :</label>
+    <input type="file" id="csv-file" accept=".csv">
+    <button onclick="importCsv()">Importer</button>
+
     <div class="chat-container">
       <div class="chat-box" id="chat-box"></div>
       <textarea id="user-message" class="chat-input" placeholder="Écrivez une question pour l'IA..." rows="4"></textarea>
@@ -128,8 +125,9 @@
   </div>
 
   <script>
-    let conversationHistory = ''; // Historique de la conversation
-    let firstResponse = false; // Variable pour suivre si c'est le premier échange
+    let conversationContext = "";
+    let exchangeCount = 0;
+    let importedData = null;
 
     async function diagnostiquer() {
       const age = document.getElementById("age").value;
@@ -142,8 +140,7 @@
       const examens_cliniques = document.getElementById("examens_cliniques").value;
       const examens_paracliniques = document.getElementById("examens_paracliniques").value;
 
-      // Créer le message initial avec toutes les données
-      const diagnosticMessage = `
+      conversationContext = `
         Bonjour, je suis infirmière libérale et je dispose des outils médicaux standards que l’on trouve dans un cabinet de médecine généraliste : un kit médical de base, un appareil d’analyse biologique Seamaty, et un électrocardiogramme.
 
         Vous êtes mon conseiller médical et votre objectif est de m’aider à diagnostiquer mon patient de manière précise et efficace.
@@ -151,116 +148,126 @@
         Voici les informations concernant mon patient :
         Âge : ${age || "N/A"}
         Sexe : ${sexe || "N/A"}
-        Poids: ${poids || "N/A"} kg
-        Taille: ${taille || "N/A"} cm
-        Symptômes actuels :  ${symptoms || "N/A"}
+        Poids : ${poids || "N/A"} kg
+        Taille : ${taille || "N/A"} cm
+        Symptômes actuels : ${symptoms || "N/A"}
         Antécédents médicaux : ${antecedents || "N/A"}
         Traitements actuels (avec doses) : ${medicaments || "N/A"}
         Examens clinique déjà effectués : ${examens_cliniques || "N/A"}
-        Examens paraclinique déjà effectués :  ${examens_paracliniques || "N/A"}
-
-        Ce que j’attends de vous avec pour chacun de ces points une réponse en une phrase :
-        Hypothèses diagnostiques : Identifiez les pathologies possibles en vous basant sur les informations fournies.
-        Questions complémentaires : Proposez des questions précises et pertinentes à poser au patient pour affiner les hypothèses diagnostiques.
-        Examens complémentaires : Suggérez les examens cliniques, biologiques ou paracliniques nécessaires au diagnostic, en tenant compte uniquement du matériel à ma disposition. Introduisez vos recommandations par : « Diagnostique à faire : … » Votre rôle est de m’assister de manière claire, structurée et orientée vers une démarche diagnostique efficace.
-
-        Répond de manière extrêmement concise et directe, en ne dépassant pas 5 lignes et inclut des pourcentages de certitude.
+        Examens paraclinique déjà effectués : ${examens_paracliniques || "N/A"}
       `;
 
-      // Ajouter la réponse initiale à l'historique
-      conversationHistory += diagnosticMessage;
-
-      try {
-        const response = await fetch('https://api.cohere.ai/v1/generate', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer krADnuor359Gp3oNFkJknqvyWMy8yfNIblE0iB3M',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'command-xlarge-nightly',
-            prompt: conversationHistory,
-            max_tokens: 200, // Limite à 200 tokens
-            temperature: 0.3 // Réduit la température pour des réponses concises
-          })
+      if (importedData) {
+        conversationContext += "\nInformations supplémentaires issues du fichier importé :\n";
+        importedData.forEach(row => {
+          conversationContext += row.join(", ") + "\n";
         });
-
-        if (!response.ok) {
-          throw new Error("Une erreur est survenue avec l'API Cohere");
-        }
-
-        const data = await response.json();
-        const resultText = data?.generations?.[0]?.text?.trim();
-        if (resultText) {
-          // Limiter la réponse à 5 lignes avec des pourcentages de certitude
-          const lines = resultText.split('\n');
-          const truncatedText = lines.slice(0, 5).join('\n');
-          document.getElementById("result").textContent = truncatedText;
-        } else {
-          alert("Aucune réponse valide reçue. Veuillez réessayer.");
-        }
-      } catch (error) {
-        alert(`Erreur : ${error.message}`);
       }
+
+      conversationContext += `
+        Ce que j’attends de vous avec pour chacun de ces points une réponse en une phrase :
+        Hypothèses diagnostiques : Identifiez les pathologies possibles en vous basant sur les informations fournies.
+        Questions complémentaires : Proposez deux questions précises et pertinentes à poser au patient pour affiner les hypothèses diagnostiques.
+        Examens complémentaires : Suggérez les examens cliniques, biologiques ou paracliniques nécessaires au diagnostic, en tenant compte uniquement du matériel à ma disposition. Introduisez vos recommandations par : « Diagnostic à faire : … »
+        Votre rôle est de m’assister de manière claire, structurée et orientée vers une démarche diagnostique efficace. Répondez de manière concise et en cinq phrases maximum et incluez des pourcentages de certitude.
+      `;
+
+      exchangeCount = 0; // Réinitialiser les itérations
+      await processMessage();
     }
 
     async function sendMessage() {
       const userMessage = document.getElementById("user-message").value.trim();
-      const chatBox = document.getElementById("chat-box");
-
       if (!userMessage) {
         alert("Veuillez entrer un message.");
         return;
       }
 
-      // Ajouter le message utilisateur à la conversation
-      chatBox.innerHTML += `<div><strong>Vous :</strong> ${userMessage}</div>`;
+      document.getElementById("chat-box").innerHTML += `<div><strong>Vous :</strong> ${userMessage}</div>`;
+      conversationContext += `\nUtilisateur : ${userMessage}\n`;
+      exchangeCount++;
 
-      // Ajouter la phrase spécifique pour le deuxième échange
-      if (!firstResponse) {
-        conversationHistory += `
-          IA : Si la certitude de ton diagnostic est faible, pose une dernière question pour affiner la situation. Sinon, donne une réponse définitive.\n
-        `;
-        firstResponse = true; // Marquer que c'est le deuxième échange
-      } else {
-        conversationHistory += ` IA : C'est votre dernière chance de répondre. Vous devez seulement donner  un diagnostic précis et clair basé sur les informations disponibles. "
-            "Ne posez plus de questions, fournissez une réponse définitive.`;
+      if (exchangeCount >= 2) {
+        conversationContext += `\nIA : C'est votre dernière chance de répondre. Vous devez seulement donner un diagnostic précis et clair basé sur les informations disponibles. Ne posez plus de questions, fournissez une réponse définitive avec un pourcentage de certitude et un traitement associé.\n`;
       }
 
+      await processMessage();
+    }
+
+    async function processMessage() {
       try {
-        const response = await fetch('https://api.cohere.ai/v1/generate', {
-          method: 'POST',
+        const response = await fetch("https://api.cohere.ai/v1/generate", {
+          method: "POST",
           headers: {
-            'Authorization': 'Bearer krADnuor359Gp3oNFkJknqvyWMy8yfNIblE0iB3M',
-            'Content-Type': 'application/json'
+            "Authorization": "Bearer krADnuor359Gp3oNFkJknqvyWMy8yfNIblE0iB3M",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: 'command-xlarge-nightly',
-            prompt: conversationHistory,
-            max_tokens: 200, // Limite à 200 tokens
-            temperature: 0.7 
-          })
+            model: "command-xlarge-nightly",
+            prompt: conversationContext,
+            max_tokens: 300,
+            temperature: 0.7,
+          }),
         });
 
         if (!response.ok) {
-          throw new Error("Une erreur est survenue avec l'API Cohere");
+          throw new Error(`Erreur API : ${response.status} - ${response.statusText}`);
         }
 
         const data = await response.json();
         const resultText = data?.generations?.[0]?.text?.trim();
+
         if (resultText) {
-          // Limiter la réponse à 5 lignes avec des pourcentages de certitude
-          const lines = resultText.split('\n');
-          const truncatedText = lines.slice(0, 5).join('\n');
-          chatBox.innerHTML += `<div><strong>IA :</strong> ${truncatedText}</div>`;
+          const formattedText = resultText
+            .replace("Hypothèses diagnostiques :", "<strong>Hypothèses diagnostiques :</strong><br>")
+            .replace("Questions complémentaires :", "<br><strong>Questions complémentaires :</strong><br>")
+            .replace("Examens complémentaires :", "<br><strong>Examens complémentaires :</strong><br>");
+
+          document.getElementById("chat-box").innerHTML += `<div><strong>IA :</strong><br>${formattedText}</div>`;
+          conversationContext += `IA : ${resultText}\n`;
         } else {
-          alert("Aucune réponse valide reçue. Veuillez réessayer.");
+          alert("Aucune réponse reçue.");
         }
       } catch (error) {
         alert(`Erreur : ${error.message}`);
       }
     }
+
+    function importCsv() {
+      const fileInput = document.getElementById("csv-file");
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert("Veuillez sélectionner un fichier CSV.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Envoyer le fichier CSV au backend Flask
+      fetch('http://127.0.0.1:5000/diagnostic', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        // Traitez la réponse du backend ici
+        if (data.diagnostic) {
+          displayDiagnostic(data.diagnostic);
+        } else if (data.error) {
+          alert(`Erreur : ${data.error}`);
+        }
+      })
+      .catch(error => {
+        alert("Erreur de communication avec le serveur.");
+      });
+    }
+
+    function displayDiagnostic(diagnostic) {
+      const resultDiv = document.getElementById("result");
+      resultDiv.innerHTML = `<strong>Diagnostic :</strong> ${diagnostic.join(", ")}`;
+    }
   </script>
 </body>
 </html>
-
